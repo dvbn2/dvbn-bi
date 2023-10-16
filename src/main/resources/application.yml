@@ -1,9 +1,9 @@
 # 公共配置文件
-# @author <a href="https://github.com/liyupi">程序员鱼皮</a>
-# @from <a href="https://yupi.icu">编程导航知识星球</a>
+# 
+# 
 spring:
   application:
-    name: springboot-init
+    name: dvbn-bi
   # 默认 dev 环境
   profiles:
     active: dev
@@ -18,26 +18,23 @@ spring:
     # 30 天过期
     timeout: 2592000
   # 数据库配置
-  # todo 需替换配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/my_db
+    url: jdbc:mysql://localhost:3306/my_bi
     username: root
     password: 123456
   # Redis 配置
-  # todo 需替换配置，然后取消注释
-#  redis:
-#    database: 1
-#    host: localhost
-#    port: 6379
-#    timeout: 5000
-#    password: 123456
+  redis:
+    database: 3
+    host: localhost
+    port: 6379
+    timeout: 5000
   # Elasticsearch 配置
   # todo 需替换配置，然后取消注释
-#  elasticsearch:
-#    uris: http://localhost:9200
-#    username: root
-#    password: 123456
+  #  elasticsearch:
+  #    uris: http://localhost:9200
+  #    username: root
+  #    password: 123456
   # 文件上传
   servlet:
     multipart:
@@ -61,6 +58,7 @@ mybatis-plus:
       logic-delete-field: isDelete # 全局逻辑删除的实体字段名
       logic-delete-value: 1 # 逻辑已删除值（默认为 1）
       logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
+
 # 微信相关
 wx:
   # 微信公众平台
@@ -90,3 +88,9 @@ cos:
     secretKey: xxx
     region: xxx
     bucket: xxx
+
+# 鱼聪明AI配置
+yuapi:
+  client:
+    access-key: eysmnfskj8e3gl9558mc3si5om2ua84m
+    secret-key: vbwqh5eu7zancoywjf4oovyqk8di39so
