@@ -6,7 +6,7 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/
-
+./README.md
 ### STS ###
 .apt_generated
 .classpath
