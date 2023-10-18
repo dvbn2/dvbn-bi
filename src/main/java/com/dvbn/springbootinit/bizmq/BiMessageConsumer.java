@@ -3,6 +3,7 @@ package com.dvbn.springbootinit.bizmq;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.dvbn.springbootinit.common.ErrorCode;
+import com.dvbn.springbootinit.constant.BiMqConstant;
 import com.dvbn.springbootinit.constant.CommonConstant;
 import com.dvbn.springbootinit.exception.BusinessException;
 import com.dvbn.springbootinit.manager.AiManager;

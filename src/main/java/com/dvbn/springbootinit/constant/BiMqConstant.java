@@ -1,4 +1,4 @@
-package com.dvbn.springbootinit.bizmq;
+package com.dvbn.springbootinit.constant;
 
 /**
  * @author dvbn

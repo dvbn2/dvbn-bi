@@ -1,5 +1,6 @@
 package com.dvbn.springbootinit.bizmq;
 
+import com.dvbn.springbootinit.constant.BiMqConstant;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 

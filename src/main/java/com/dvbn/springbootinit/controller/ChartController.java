@@ -392,7 +392,7 @@ public class ChartController {
      */
     @PostMapping("/gen/async/mq")
     @Transactional(rollbackFor = Exception.class)
-    public BaseResponse<BiResponse> genChartByAiAsyncMq(@RequestPart("file") MultipartFile multipartFile,
+    public BaseResponse<String> genChartByAiAsyncMq(@RequestPart("file") MultipartFile multipartFile,
                                                       GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
 
         String name = genChartByAiRequest.getName();
@@ -461,12 +461,7 @@ public class ChartController {
         // 发送消息
         biMessageProducer.sendMessage(String.valueOf(chart.getId()));
 
-        BiResponse biResponse = new BiResponse();
-        biResponse.setGenChart(chart.getGenChart());
-        biResponse.setGenResult(chart.getGenResult());
-        biResponse.setChartId(chart.getId());
-
-        return ResultUtils.success(biResponse);
+        return ResultUtils.success("操作成功");
     }
 
     /**

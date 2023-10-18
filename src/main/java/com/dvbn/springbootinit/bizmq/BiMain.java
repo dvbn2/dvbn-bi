@@ -1,5 +1,6 @@
 package com.dvbn.springbootinit.bizmq;
 
+import com.dvbn.springbootinit.constant.BiMqConstant;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
