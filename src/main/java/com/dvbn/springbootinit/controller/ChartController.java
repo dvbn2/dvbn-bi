@@ -3,9 +3,11 @@ package com.dvbn.springbootinit.controller;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.dvbn.springbootinit.annotation.AuthCheck;
+import com.dvbn.springbootinit.bizmq.BiMessageProducer;
 import com.dvbn.springbootinit.common.BaseResponse;
 import com.dvbn.springbootinit.common.DeleteRequest;
 import com.dvbn.springbootinit.common.ErrorCode;
@@ -33,6 +35,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -56,6 +60,9 @@ public class ChartController {
     private RedisLimiterManager redisLimiterManager;
     @Resource
     private ThreadPoolExecutor threadPoolExecutor;
+
+    @Resource
+    private BiMessageProducer biMessageProducer;
 
     // region 增删改查
 
@@ -225,7 +232,7 @@ public class ChartController {
      * @param request
      * @return
      */
-    @PostMapping("/gen")
+    @PostMapping("/gen/async")
     @Transactional(rollbackFor = Exception.class)
     public BaseResponse<BiResponse> genChartByAiAsync(@RequestPart("file") MultipartFile multipartFile,
                                                       GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
@@ -335,7 +342,7 @@ public class ChartController {
             updateChart.setStatus("running");
             boolean beforeResult = chartService.updateById(updateChart);
             if (!beforeResult) {
-                handlerChartUpdateError(ErrorCode.OPERATION_ERROR, updateChart, "更新图表失败");
+                chartService.handlerChartUpdateError(ErrorCode.OPERATION_ERROR, updateChart, "更新图表失败");
             }
 
 
@@ -344,7 +351,7 @@ public class ChartController {
             String[] split = data.split("-----");
 
             if (split.length < 3) {
-                handlerChartUpdateError(ErrorCode.SYSTEM_ERROR, updateChart, "AI 生成错误");
+                chartService.handlerChartUpdateError(ErrorCode.SYSTEM_ERROR, updateChart, "AI 生成错误");
             }
 
             String genChart = split[1].trim();
@@ -360,7 +367,7 @@ public class ChartController {
             updateChart.setExecMessage("执行成功");
             boolean afterResult = chartService.updateById(updateChart);
             if (!afterResult) {
-                handlerChartUpdateError(ErrorCode.OPERATION_ERROR, updateChart, "更新图表失败");
+                chartService.handlerChartUpdateError(ErrorCode.OPERATION_ERROR, updateChart, "更新图表失败");
             }
 
 
@@ -376,17 +383,90 @@ public class ChartController {
 
 
     /**
-     * 图表更新失败
+     * 智能分析（异步消息队列）
      *
-     * @param code
-     * @param chart
-     * @param errorMessage
+     * @param multipartFile
+     * @param genChartByAiRequest
+     * @param request
+     * @return
      */
-    private void handlerChartUpdateError(ErrorCode code, Chart chart, String errorMessage) {
-        chart.setStatus("failed");
-        chart.setExecMessage(errorMessage);
-        chartService.updateById(chart);
-        throw new BusinessException(code, errorMessage);
+    @PostMapping("/gen/async/mq")
+    @Transactional(rollbackFor = Exception.class)
+    public BaseResponse<BiResponse> genChartByAiAsyncMq(@RequestPart("file") MultipartFile multipartFile,
+                                                      GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+
+        String name = genChartByAiRequest.getName();
+        String goal = genChartByAiRequest.getGoal();
+        String chartType = genChartByAiRequest.getChartType();
+
+        // 校验
+        ThrowUtils.throwIf(StrUtil.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        ThrowUtils.throwIf(StrUtil.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
+
+        // 校验文件
+        long fileSize = multipartFile.getSize(); // 文件大小
+        String filename = multipartFile.getOriginalFilename(); // 文件名
+
+        final long ONE_MB = 1024 * 1024L; // 限定文件大小为1MB
+        ThrowUtils.throwIf(fileSize > ONE_MB, ErrorCode.PARAMS_ERROR, "文件不可大于1MB");
+
+        String suffix = FileUtil.getSuffix(filename);
+        final Set<String> availableSuffixSet = Set.of("xlsx", "xls", "csv");
+        ThrowUtils.throwIf(!availableSuffixSet.contains(suffix), ErrorCode.PARAMS_ERROR, "文件后缀不规范");
+
+
+        User user = userService.getLoginUser(request);
+
+        // 限流
+        redisLimiterManager.doRateLimit("genChartByBI_" + user.getId());
+
+        String s = """
+                你是一个数据分析师和前端开发专家，接下来我会按照以下固定格式给你提供内容:
+                分析需求:
+                {数据分析的需求或者目标}
+                原始数据:
+                {csv格式的原始数据，用,作为分隔符}
+                请根据这两部分内容，按照以下指定格式生成内容(此外不要输出任何多余的开头、结尾、注释)
+                -----
+                {前端 Echarts V5 的option 配置对象json代码，合理地将数据进行可视化，不要生成任何多余的内容，比如注释}
+                -----
+                {明确的数据分析结论、越详细越好，不要生成多余的注释}
+                                
+                分析网站用户增长情况，数据如下：
+                1号：用户数10
+                2号：用户数20
+                3号：用户数60
+                4号：用户数20
+                5号：用户数100
+                6号：用户数40
+                """;
+
+        // 数据压缩，将excel转为csv
+        String result = ExcelUtils.excelToCsv(multipartFile);
+
+        // 插入到数据库
+        Chart chart = Chart.builder()
+                .name(name)
+                .goal(goal)
+                .chartData(result)
+                .chartType(chartType)
+                .status("wait")
+                .userId(user.getId())
+                .build();
+
+        boolean saveResult = chartService.save(chart);
+        ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "图表保存失败");
+
+
+        // 发送消息
+        biMessageProducer.sendMessage(String.valueOf(chart.getId()));
+
+        BiResponse biResponse = new BiResponse();
+        biResponse.setGenChart(chart.getGenChart());
+        biResponse.setGenResult(chart.getGenResult());
+        biResponse.setChartId(chart.getId());
+
+        return ResultUtils.success(biResponse);
     }
 
     /**
